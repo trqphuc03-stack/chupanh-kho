@@ -187,7 +187,7 @@ if submit:
                     branch,
                     url_bill,
                     url_goods,
-                    st.experimental_user.get("email", "—"),  # email nếu có auth
+                    "—",  # email nếu có auth
                 ])
 
                 st.success(f"✅ Đã lưu thành công lúc {timestamp}")
