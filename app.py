@@ -4,7 +4,8 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaInMemoryUpload
 import datetime
-import pytz
+import os
+os.environ["TZ"] = "Asia/Ho_Chi_Minh"
 import io
 import json
 from PIL import Image, ImageDraw, ImageFont
@@ -288,7 +289,7 @@ if count < MAX_PHOTOS:
                             folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"]
                             branch_slug = st.session_state.branch.replace(" ", "_")
                             filename = f"anh{count+1}_{branch_slug}_{st.session_state.session_ts}.jpg"
-                            now_str = datetime.datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).strftime("%Y-%m-%d %H:%M:%S")
+                            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             watermark = [now_str]
                             url = upload_image_to_drive(
                                 drive_service,
@@ -323,7 +324,7 @@ if count < MAX_PHOTOS:
                             if photo is not None and len(urls) == count:
                                 branch_slug = st.session_state.branch.replace(" ", "_")
                                 filename = f"anh{count+1}_{branch_slug}_{st.session_state.session_ts}.jpg"
-                                now_str = datetime.datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).strftime("%Y-%m-%d %H:%M:%S")
+                                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 watermark = [now_str]
                                 url = upload_image_to_drive(
                                     drive_service,
