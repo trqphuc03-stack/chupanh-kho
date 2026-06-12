@@ -198,7 +198,24 @@ def finalize_to_sheet(gc, spreadsheet_id, branch, timestamp, image_urls):
 
         ws.update_cell(next_row, link_col, url)
         ws.update_cell(next_row, img_col, f'=IMAGE({letter}{next_row})')
+def upload_all_and_finalize(drive_service, gc, folder_id, spreadsheet_id, branch, session_ts, photos_bytes):
+    import concurrent.futures
+    timestamp = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
+    branch_slug = branch.replace(" ", "_")
 
+    def upload_one(args):
+        i, img_bytes = args
+        now_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
+        filename = f"anh{i+1}_{branch_slug}_{session_ts}.jpg"
+        return i, upload_image_to_drive(drive_service, img_bytes, filename, folder_id, watermark_lines=[now_str])
+
+    urls = [None] * len(photos_bytes)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        for i, url in executor.map(upload_one, enumerate(photos_bytes)):
+            urls[i] = url
+
+    finalize_to_sheet(gc, spreadsheet_id, branch, timestamp, urls)
+    return urls
 # ── Session state ────────────────────────────────────────────────
 if "saved_urls" not in st.session_state:
     st.session_state.saved_urls = []          # list of uploaded Drive URLs
@@ -229,7 +246,7 @@ if st.session_state.session_done:
         st.session_state.saved_bytes = []
         st.session_state.session_done = False
         st.session_state.branch = "-- Chọn chi nhánh --"
-        st.session_state.session_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        st.session_state.session_ts = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y%m%d_%H%M%S")
         st.rerun()
     st.stop()
 
@@ -281,66 +298,29 @@ if count < MAX_PHOTOS:
                 if st.session_state.branch == "-- Chọn chi nhánh --":
                     st.error("⚠️ Vui lòng chọn chi nhánh trước.")
                 else:
-                    with st.spinner("Đang upload ảnh..."):
-                        try:
-                            gc, drive_service = get_google_clients()
-                            folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"]
-                            branch_slug = st.session_state.branch.replace(" ", "_")
-                            filename = f"anh{count+1}_{branch_slug}_{st.session_state.session_ts}.jpg"
-                            now_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
-                            watermark = [now_str]
-                            url = upload_image_to_drive(
-                                drive_service,
-                                photo.getvalue(),
-                                filename,
-                                folder_id,
-                                watermark_lines=watermark,
-                            )
-                            st.session_state.saved_urls.append(url)
-                            st.session_state.saved_bytes.append(photo.getvalue())
-                            st.success(f"✅ Đã lưu ảnh #{count + 1}")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Lỗi upload: {e}")
+                    st.session_state.saved_bytes.append(photo.getvalue())
+                    st.session_state.saved_urls.append(f"__pending__")
+                    st.rerun()
 
         with col2:
             if st.button("🏁 Hoàn tất ngay"):
                 if st.session_state.branch == "-- Chọn chi nhánh --":
                     st.error("⚠️ Vui lòng chọn chi nhánh trước.")
-                elif len(st.session_state.saved_urls) == 0 and photo is None:
-                    st.error("⚠️ Chưa có ảnh nào được lưu.")
+                elif len(st.session_state.saved_bytes) == 0 and photo is None:
+                    st.error("⚠️ Chưa có ảnh nào.")
                 else:
-                    with st.spinner("Đang hoàn tất..."):
+                    if photo is not None and len(st.session_state.saved_bytes) == count:
+                        st.session_state.saved_bytes.append(photo.getvalue())
+                    with st.spinner("Đang upload & lưu..."):
                         try:
                             gc, drive_service = get_google_clients()
-                            folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"]
-                            spreadsheet_id = st.secrets["GOOGLE_SHEET_ID"]
-
-                            urls = list(st.session_state.saved_urls)
-
-                            # Nếu ảnh hiện tại chưa lưu, upload luôn
-                            if photo is not None and len(urls) == count:
-                                branch_slug = st.session_state.branch.replace(" ", "_")
-                                filename = f"anh{count+1}_{branch_slug}_{st.session_state.session_ts}.jpg"
-                                now_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
-                                watermark = [now_str]
-                                url = upload_image_to_drive(
-                                    drive_service,
-                                    photo.getvalue(),
-                                    filename,
-                                    folder_id,
-                                    watermark_lines=watermark,
-                                )
-                                urls.append(url)
-                                st.session_state.saved_bytes.append(photo.getvalue())
-
-                            timestamp = (datetime.datetime.utcnow() + datetime.timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
-                            finalize_to_sheet(
-                                gc,
-                                spreadsheet_id,
+                            urls = upload_all_and_finalize(
+                                drive_service, gc,
+                                st.secrets["GOOGLE_DRIVE_FOLDER_ID"],
+                                st.secrets["GOOGLE_SHEET_ID"],
                                 st.session_state.branch,
-                                timestamp,
-                                urls,
+                                st.session_state.session_ts,
+                                st.session_state.saved_bytes,
                             )
                             st.session_state.saved_urls = urls
                             st.session_state.session_done = True
@@ -353,18 +333,18 @@ elif count > 0:
     # Đã đủ 8 ảnh
     st.info("📸 Đã đủ 8 ảnh tối đa.")
     if st.button("🏁 Hoàn tất & Lưu vào Sheet"):
-        with st.spinner("Đang lưu vào Google Sheet..."):
+        with st.spinner("Đang upload & lưu..."):
             try:
-                gc, _ = get_google_clients()
-                spreadsheet_id = st.secrets["GOOGLE_SHEET_ID"]
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                finalize_to_sheet(
-                    gc,
-                    spreadsheet_id,
+                gc, drive_service = get_google_clients()
+                urls = upload_all_and_finalize(
+                    drive_service, gc,
+                    st.secrets["GOOGLE_DRIVE_FOLDER_ID"],
+                    st.secrets["GOOGLE_SHEET_ID"],
                     st.session_state.branch,
-                    timestamp,
-                    st.session_state.saved_urls,
+                    st.session_state.session_ts,
+                    st.session_state.saved_bytes,
                 )
+                st.session_state.saved_urls = urls
                 st.session_state.session_done = True
                 st.rerun()
             except Exception as e:
@@ -374,18 +354,18 @@ elif count > 0:
 if 0 < count < MAX_PHOTOS and count == len(st.session_state.saved_urls):
     st.markdown("---")
     if st.button(f"🏁 Hoàn tất với {count} ảnh đã lưu"):
-        with st.spinner("Đang lưu vào Google Sheet..."):
+        with st.spinner("Đang upload & lưu..."):
             try:
-                gc, _ = get_google_clients()
-                spreadsheet_id = st.secrets["GOOGLE_SHEET_ID"]
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                finalize_to_sheet(
-                    gc,
-                    spreadsheet_id,
+                gc, drive_service = get_google_clients()
+                urls = upload_all_and_finalize(
+                    drive_service, gc,
+                    st.secrets["GOOGLE_DRIVE_FOLDER_ID"],
+                    st.secrets["GOOGLE_SHEET_ID"],
                     st.session_state.branch,
-                    timestamp,
-                    st.session_state.saved_urls,
+                    st.session_state.session_ts,
+                    st.session_state.saved_bytes,
                 )
+                st.session_state.saved_urls = urls
                 st.session_state.session_done = True
                 st.rerun()
             except Exception as e:
