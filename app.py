@@ -116,29 +116,36 @@ def get_google_clients():
     return gc, drive_service
 
 def add_watermark(image_bytes, text_lines):
+    import requests, os
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
     font_size = max(60, img.width // 12)
+    
     font = None
-    font_paths = [
-        "arialbd.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ]
-    for path in font_paths:
+    font_path = "/tmp/arialbd.ttf"
+    
+    # Tải font về /tmp nếu chưa có
+    if not os.path.exists(font_path):
         try:
-            font = ImageFont.truetype(path, font_size)
-            break
+            r = requests.get(
+                "https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf",
+                timeout=5
+            )
+            with open(font_path, "wb") as f:
+                f.write(r.content)
         except:
-            continue
-    if font is None:
+            pass
+    
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+    except:
         font = ImageFont.load_default()
 
-    x0 = 24
-    y0 = 24  # góc trên bên trái
-    line = text_lines[0]  # chỉ lấy dòng thời gian
+    x0, y0 = 24, 24
+    line = text_lines[0]
     for dx, dy in [(-3,-3),(3,-3),(-3,3),(3,3)]:
-        draw.text((x0 + dx, y0 + dy), line, font=font, fill=(0, 0, 0))
-    draw.text((x0, y0), line, font=font, fill=(255, 255, 255))
+        draw.text((x0+dx, y0+dy), line, font=font, fill=(0,0,0))
+    draw.text((x0, y0), line, font=font, fill=(255,255,255))
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=92)
