@@ -217,7 +217,7 @@ if "session_done" not in st.session_state:
 if "branch" not in st.session_state:
     st.session_state.branch = "-- Chọn chi nhánh --"
 if "session_ts" not in st.session_state:
-    st.session_state.session_ts = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=7).strftime("%Y%m%d_%H%M%S")
+    st.session_state.session_ts = (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=7)).strftime("%Y%m%d_%H%M%S")
 
 MAX_PHOTOS = 8
 
@@ -237,7 +237,7 @@ if st.session_state.session_done:
         st.session_state.saved_bytes = []
         st.session_state.session_done = False
         st.session_state.branch = "-- Chọn chi nhánh --"
-        st.session_state.session_ts = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=7).strftime("%Y%m%d_%H%M%S")
+        st.session_state.session_ts = (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=7)).strftime("%Y%m%d_%H%M%S")
         st.rerun()
     st.stop()
 
