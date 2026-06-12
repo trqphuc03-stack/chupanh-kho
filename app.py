@@ -6,7 +6,6 @@ from googleapiclient.http import MediaInMemoryUpload
 import datetime
 import io
 import json
-from PIL import Image, ImageDraw, ImageFont
 
 # ── Cấu hình trang ──────────────────────────────────────────────
 st.set_page_config(
@@ -114,44 +113,7 @@ def get_google_clients():
     drive_service = build("drive", "v3", credentials=creds)
     return gc, drive_service
 
-def add_watermark(image_bytes, text_lines):
-    import requests, os
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    draw = ImageDraw.Draw(img)
-    font_size = max(16, img.width // 70)
-    
-    font = None
-    font_path = "/tmp/arialbd.ttf"
-    
-    # Tải font về /tmp nếu chưa có
-    if not os.path.exists(font_path):
-        try:
-            r = requests.get(
-                "https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf",
-                timeout=5
-            )
-            with open(font_path, "wb") as f:
-                f.write(r.content)
-        except:
-            pass
-    
-    try:
-        font = ImageFont.truetype(font_path, font_size)
-    except:
-        font = ImageFont.load_default()
-
-    x0, y0 = 24, 24
-    line = text_lines[0]
-    for dx, dy in [(-3,-3),(3,-3),(-3,3),(3,3)]:
-        draw.text((x0+dx, y0+dy), line, font=font, fill=(0,0,0))
-    draw.text((x0, y0), line, font=font, fill=(255,255,255))
-
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=90)
-    return buf.getvalue()
-def upload_image_to_drive(drive_service, image_bytes, filename, folder_id, watermark_lines=None):
-    if watermark_lines:
-        image_bytes = add_watermark(image_bytes, watermark_lines)
+def upload_image_to_drive(drive_service, image_bytes, filename, folder_id):
     media = MediaInMemoryUpload(image_bytes, mimetype="image/jpeg")
     file_metadata = {"name": filename, "parents": [folder_id]}
     uploaded = drive_service.files().create(
@@ -195,20 +157,9 @@ def upload_all_and_finalize(drive_service, gc, folder_id, spreadsheet_id, branch
 
     urls = []
     for i, img_bytes in enumerate(photos_bytes):
-        now_str = (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
-
-        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        if img.width > 1920 or img.height > 1920:
-            img.thumbnail((1920, 1920), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=88, optimize=True)
-        compressed = buf.getvalue()
-        del img, buf
-
         filename = f"anh{i+1}_{branch_slug}_{session_ts}.jpg"
-        url = upload_image_to_drive(drive_service, compressed, filename, folder_id, watermark_lines=[now_str])
+        url = upload_image_to_drive(drive_service, img_bytes, filename, folder_id)
         urls.append(url)
-        del compressed
 
     finalize_to_sheet(gc, spreadsheet_id, branch, timestamp, urls)
     return urls
