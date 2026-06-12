@@ -147,7 +147,7 @@ def add_watermark(image_bytes, text_lines):
     draw.text((x0, y0), line, font=font, fill=(255,255,255))
 
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=92)
+    img.save(buf, format="JPEG", quality=70)
     return buf.getvalue()
 def upload_image_to_drive(drive_service, image_bytes, filename, folder_id, watermark_lines=None):
     if watermark_lines:
@@ -202,7 +202,7 @@ def upload_all_and_finalize(drive_service, gc, folder_id, spreadsheet_id, branch
         if img.width > 1000 or img.height > 1000:
             img.thumbnail((1000, 1000), Image.LANCZOS)
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=60)
+        img.save(buf, format="JPEG", quality=80)
         compressed = buf.getvalue()
         del img, buf  # giải phóng memory ngay
         
