@@ -6,6 +6,7 @@ from googleapiclient.http import MediaInMemoryUpload
 import datetime
 import io
 import json
+from PIL import Image, ImageDraw, ImageFont
 
 # ── Cấu hình trang ──────────────────────────────────────────────
 st.set_page_config(
@@ -113,7 +114,28 @@ def get_google_clients():
     drive_service = build("drive", "v3", credentials=creds)
     return gc, drive_service
 
-def upload_image_to_drive(drive_service, image_bytes, filename, folder_id):
+def add_watermark(image_bytes, text_lines):
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    draw = ImageDraw.Draw(img)
+    font_size = max(20, img.width // 30)
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+    except:
+        font = ImageFont.load_default()
+    margin = 16
+    line_height = font_size + 6
+    x0 = margin
+    y0 = img.height - (line_height * len(text_lines)) - margin
+    for i, line in enumerate(text_lines):
+        y = y0 + i * line_height
+        draw.text((x0 + 2, y + 2), line, font=font, fill=(0, 0, 0))
+        draw.text((x0, y), line, font=font, fill=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    return buf.getvalue()
+def upload_image_to_drive(drive_service, image_bytes, filename, folder_id, watermark_lines=None):
+    if watermark_lines:
+        image_bytes = add_watermark(image_bytes, watermark_lines)
     media = MediaInMemoryUpload(image_bytes, mimetype="image/jpeg")
     file_metadata = {"name": filename, "parents": [folder_id]}
     uploaded = drive_service.files().create(
@@ -249,11 +271,14 @@ if count < MAX_PHOTOS:
                             folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"]
                             branch_slug = st.session_state.branch.replace(" ", "_")
                             filename = f"anh{count+1}_{branch_slug}_{st.session_state.session_ts}.jpg"
+                            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            watermark = [now_str, "Vạn Phúc - Hà Đông"]
                             url = upload_image_to_drive(
                                 drive_service,
                                 photo.getvalue(),
                                 filename,
                                 folder_id,
+                                watermark_lines=watermark,
                             )
                             st.session_state.saved_urls.append(url)
                             st.session_state.saved_bytes.append(photo.getvalue())
@@ -281,11 +306,14 @@ if count < MAX_PHOTOS:
                             if photo is not None and len(urls) == count:
                                 branch_slug = st.session_state.branch.replace(" ", "_")
                                 filename = f"anh{count+1}_{branch_slug}_{st.session_state.session_ts}.jpg"
+                                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                watermark = [now_str, "Vạn Phúc - Hà Đông"]
                                 url = upload_image_to_drive(
                                     drive_service,
                                     photo.getvalue(),
                                     filename,
                                     folder_id,
+                                    watermark_lines=watermark,
                                 )
                                 urls.append(url)
                                 st.session_state.saved_bytes.append(photo.getvalue())
