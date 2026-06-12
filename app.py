@@ -118,7 +118,7 @@ def add_watermark(image_bytes, text_lines):
     import requests, os
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img)
-    font_size = max(30, img.width // 45)
+    font_size = max(16, img.width // 70)
     
     font = None
     font_path = "/tmp/arialbd.ttf"
