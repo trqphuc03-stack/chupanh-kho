@@ -196,20 +196,19 @@ def upload_all_and_finalize(drive_service, gc, folder_id, spreadsheet_id, branch
     urls = []
     for i, img_bytes in enumerate(photos_bytes):
         now_str = (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Nén ảnh trước khi upload
+
         img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        if img.width > 1000 or img.height > 1000:
-            img.thumbnail((1000, 1000), Image.LANCZOS)
+        if img.width > 1400 or img.height > 1400:
+            img.thumbnail((1400, 1400), Image.LANCZOS)
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=100)
+        img.save(buf, format="JPEG", quality=78, optimize=True)
         compressed = buf.getvalue()
-        del img, buf  # giải phóng memory ngay
-        
+        del img, buf
+
         filename = f"anh{i+1}_{branch_slug}_{session_ts}.jpg"
         url = upload_image_to_drive(drive_service, compressed, filename, folder_id, watermark_lines=[now_str])
         urls.append(url)
-        del compressed  # giải phóng memory ngay
+        del compressed
 
     finalize_to_sheet(gc, spreadsheet_id, branch, timestamp, urls)
     return urls
