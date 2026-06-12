@@ -201,9 +201,9 @@ def upload_all_and_finalize(drive_service, gc, folder_id, spreadsheet_id, branch
         return i, upload_image_to_drive(drive_service, img_bytes, filename, folder_id, watermark_lines=[now_str])
 
     urls = [None] * len(photos_bytes)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        for i, url in executor.map(upload_one, enumerate(photos_bytes)):
-            urls[i] = url
+    for args in enumerate(photos_bytes):
+        i, url = upload_one(args)
+        urls[i] = url
 
     finalize_to_sheet(gc, spreadsheet_id, branch, timestamp, urls)
     return urls
